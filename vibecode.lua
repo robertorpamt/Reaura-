@@ -17,8 +17,8 @@ ScreenGui.ResetOnSpawn = false
 
 -- Responsive mobile sizing (adapts to touch screens fluidly)
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -170, 0.4, -170)
+MainFrame.Size = UDim2.new(0, 340, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -190)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -40,7 +40,7 @@ TitleLabel.Parent = MainFrame
 ScrollFrame.Size = UDim2.new(1, -20, 1, -60)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 550)
 ScrollFrame.ScrollBarThickness = 2
 ScrollFrame.Parent = MainFrame
 
@@ -119,7 +119,7 @@ local LocalPlayer = game:GetService("Players").LocalPlayer
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5)
 local playerRemotes = remotesFolder and remotesFolder:WaitForChild("PlayerRemotes", 5)
 local sprintRE = playerRemotes and playerRemotes:WaitForChild("SprintRequestRE", 5)
-local upgradeRF = playerRemotes and playerRemotes:WaitForChild("PurchaseTowerUpgradeRF", 5)
+local purchaseUpgradeRF = playerRemotes and playerRemotes:WaitForChild("PurchaseTowerUpgradeRF", 5)
 
 local function fireSprintRemote()
     if Flags.Sprint and sprintRE then pcall(function() sprintRE:FireServer(true) end) end
@@ -130,14 +130,24 @@ LocalPlayer.CharacterAdded:Connect(function() task.wait(0.3) fireSprintRemote() 
 task.spawn(function()
     while true do
         task.wait(0.3)
-        if upgradeRF then
-            if Flags.APGain then pcall(function() upgradeRF:InvokeServer("APGain") end) end
-            if Flags.Fortitude then pcall(function() upgradeRF:InvokeServer("Fortitude") end) end
-            if Flags.Composure then pcall(function() upgradeRF:InvokeServer("Composure") end) end
-            if Flags.Momentum then pcall(function() upgradeRF:InvokeServer("Momentum") end) end
-            if Flags.BonusSpeed then pcall(function() upgradeRF:InvokeServer("BonusSpeed") end) end
-            if Flags.AuraRecharge then pcall(function() upgradeRF:InvokeServer("AuraRecharge") end) end
-            if Flags.AuraStrength then pcall(function() upgradeRF:InvokeServer("AuraStrength") end) end
+        if purchaseUpgradeRF then
+            -- Regular upgrade purchases
+            if Flags.APGain then pcall(function() purchaseUpgradeRF:InvokeServer("APGain") end) end
+            if Flags.Fortitude then pcall(function() purchaseUpgradeRF:InvokeServer("Fortitude") end) end
+            if Flags.Composure then pcall(function() purchaseUpgradeRF:InvokeServer("Composure") end) end
+            if Flags.Momentum then pcall(function() purchaseUpgradeRF:InvokeServer("Momentum") end) end
+            if Flags.BonusSpeed then pcall(function() purchaseUpgradeRF:InvokeServer("BonusSpeed") end) end
+            if Flags.AuraRecharge then pcall(function() purchaseUpgradeRF:InvokeServer("AuraRecharge") end) end
+            if Flags.AuraStrength then pcall(function() purchaseUpgradeRF:InvokeServer("AuraStrength") end) end
+            
+            -- Unlock upgrades (new method)
+            if Flags.APGain then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "APGain") end) end
+            if Flags.Fortitude then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "Fortitude") end) end
+            if Flags.Composure then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "Composure") end) end
+            if Flags.Momentum then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "Momentum") end) end
+            if Flags.BonusSpeed then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "BonusSpeed") end) end
+            if Flags.AuraRecharge then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "AuraRecharge") end) end
+            if Flags.AuraStrength then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "AuraStrength") end) end
         end
     end
 end)
@@ -153,63 +163,41 @@ local function startAutoClimb()
     
     climbThread = task.spawn(function()
         local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
         local RootPart = Character:WaitForChild("HumanoidRootPart")
         
-        local SpiralTower = workspace:WaitForChild("SpiralTower")
-        local TARGET_FLOOR = 50
-        local WAYPOINT_DISTANCE = 10
+        print("🏃 Starting spiral climb to Floor 50...")
         
-        print("🏃 Starting climb to Floor " .. TARGET_FLOOR .. "...")
-        
-        local function getFloorStairTop(floorNumber)
-            local floor = SpiralTower:FindFirstChild("Floor" .. floorNumber)
-            if not floor then return nil end
-            
-            local steps = floor:FindFirstChild("Steps")
-            if steps then
-                local highestY = 0
-                local topPosition = steps.Position
-                
-                for _, step in pairs(steps:GetChildren()) do
-                    if step:IsA("BasePart") and step.Position.Y > highestY then
-                        highestY = step.Position.Y
-                        topPosition = step.Position + Vector3.new(0, 3, 0)
-                    end
-                end
-                
-                return topPosition
-            end
-            
-            return nil
+        -- Activate sprint
+        if sprintRE then
+            pcall(function() sprintRE:FireServer(true) end)
         end
         
-        for floorNum = 0, TARGET_FLOOR do
+        task.wait(0.5)
+        
+        local startY = RootPart.Position.Y
+        local targetHeight = 300
+        local rotation = 0
+        
+        while (RootPart.Position.Y - startY) < targetHeight do
             if not Flags.AutoClimb or not Character.Parent then 
                 print("❌ Auto-climb stopped!")
                 break 
             end
             
-            local targetPos = getFloorStairTop(floorNum)
+            -- Rotate character continuously (spiral motion)
+            rotation = rotation + 0.05
             
-            if targetPos then
-                print("📍 Moving to Floor " .. floorNum .. "...")
-                
-                while (targetPos - RootPart.Position).Magnitude > WAYPOINT_DISTANCE do
-                    if not Flags.AutoClimb or not Character.Parent then break end
-                    
-                    Humanoid:MoveTo(targetPos)
-                    task.wait(0.05)
-                end
-                
-                if floorNum < TARGET_FLOOR then
-                    Humanoid:Jump()
-                    task.wait(0.3)
-                end
-            end
+            local rotatedCFrame = CFrame.new(RootPart.Position) * CFrame.Angles(0, rotation, 0)
+            local forwardDirection = rotatedCFrame.LookVector
+            
+            -- Move forward in the rotated direction while going up
+            local newPos = RootPart.Position + forwardDirection * 2 + Vector3.new(0, 0.2, 0)
+            RootPart.CFrame = CFrame.new(newPos, newPos + forwardDirection)
+            
+            task.wait(0.05)
         end
         
-        print("✅ Reached Floor " .. TARGET_FLOOR .. "!")
+        print("✅ Reached Floor 50!")
         climbThread = nil
     end)
 end
