@@ -17,8 +17,8 @@ ScreenGui.ResetOnSpawn = false
 
 -- Responsive mobile sizing (adapts to touch screens fluidly)
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 260)
-MainFrame.Position = UDim2.new(0.5, -170, 0.4, -130)
+MainFrame.Size = UDim2.new(0, 340, 0, 340)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -170)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -40,7 +40,7 @@ TitleLabel.Parent = MainFrame
 ScrollFrame.Size = UDim2.new(1, -20, 1, -60)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 400)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
 ScrollFrame.ScrollBarThickness = 2
 ScrollFrame.Parent = MainFrame
 
@@ -56,8 +56,11 @@ local Flags = {
     Momentum = false,
     BonusSpeed = false,
     AuraRecharge = false,
-    AuraStrength = false
+    AuraStrength = false,
+    AutoClimb = false
 }
+
+local climbThread = nil
 
 local function AddMobileToggle(name, flagName, defaultVal)
     Flags[flagName] = defaultVal
@@ -106,8 +109,11 @@ AddMobileToggle("Auto Momentum Upgrade", "Momentum", false)
 AddMobileToggle("Auto BonusSpeed Upgrade", "BonusSpeed", false)
 AddMobileToggle("Auto AuraRecharge Upgrade", "AuraRecharge", false)
 AddMobileToggle("Auto AuraStrength Upgrade", "AuraStrength", false)
+AddMobileToggle("Auto-Climb to Floor 50", "AutoClimb", false)
 
--- Core Execution Backend
+-- =========================================================================
+-- CORE EXECUTION BACKEND
+-- =========================================================================
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5)
@@ -132,6 +138,96 @@ task.spawn(function()
             if Flags.BonusSpeed then pcall(function() upgradeRF:InvokeServer("BonusSpeed") end) end
             if Flags.AuraRecharge then pcall(function() upgradeRF:InvokeServer("AuraRecharge") end) end
             if Flags.AuraStrength then pcall(function() upgradeRF:InvokeServer("AuraStrength") end) end
+        end
+    end
+end)
+
+-- =========================================================================
+-- AUTO-CLIMB SPIRAL STAIRCASE ENGINE
+-- =========================================================================
+local function startAutoClimb()
+    if climbThread then
+        task.cancel(climbThread)
+        climbThread = nil
+    end
+    
+    climbThread = task.spawn(function()
+        local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local Humanoid = Character:WaitForChild("Humanoid")
+        local RootPart = Character:WaitForChild("HumanoidRootPart")
+        
+        local SpiralTower = workspace:WaitForChild("SpiralTower")
+        local TARGET_FLOOR = 50
+        local WAYPOINT_DISTANCE = 10
+        
+        print("🏃 Starting climb to Floor " .. TARGET_FLOOR .. "...")
+        
+        local function getFloorStairTop(floorNumber)
+            local floor = SpiralTower:FindFirstChild("Floor" .. floorNumber)
+            if not floor then return nil end
+            
+            local steps = floor:FindFirstChild("Steps")
+            if steps then
+                local highestY = 0
+                local topPosition = steps.Position
+                
+                for _, step in pairs(steps:GetChildren()) do
+                    if step:IsA("BasePart") and step.Position.Y > highestY then
+                        highestY = step.Position.Y
+                        topPosition = step.Position + Vector3.new(0, 3, 0)
+                    end
+                end
+                
+                return topPosition
+            end
+            
+            return nil
+        end
+        
+        for floorNum = 0, TARGET_FLOOR do
+            if not Flags.AutoClimb or not Character.Parent then 
+                print("❌ Auto-climb stopped!")
+                break 
+            end
+            
+            local targetPos = getFloorStairTop(floorNum)
+            
+            if targetPos then
+                print("📍 Moving to Floor " .. floorNum .. "...")
+                
+                while (targetPos - RootPart.Position).Magnitude > WAYPOINT_DISTANCE do
+                    if not Flags.AutoClimb or not Character.Parent then break end
+                    
+                    Humanoid:MoveTo(targetPos)
+                    task.wait(0.05)
+                end
+                
+                if floorNum < TARGET_FLOOR then
+                    Humanoid:Jump()
+                    task.wait(0.3)
+                end
+            end
+        end
+        
+        print("✅ Reached Floor " .. TARGET_FLOOR .. "!")
+        climbThread = nil
+    end)
+end
+
+-- Monitor AutoClimb flag changes
+task.spawn(function()
+    local previousState = false
+    while true do
+        task.wait(0.1)
+        if Flags.AutoClimb and not previousState then
+            startAutoClimb()
+            previousState = true
+        elseif not Flags.AutoClimb and previousState then
+            if climbThread then
+                task.cancel(climbThread)
+                climbThread = nil
+            end
+            previousState = false
         end
     end
 end)
