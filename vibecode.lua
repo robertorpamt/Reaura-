@@ -17,8 +17,8 @@ ScreenGui.ResetOnSpawn = false
 
 -- Responsive mobile sizing (adapts to touch screens fluidly)
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 460)
-MainFrame.Position = UDim2.new(0.5, -170, 0.4, -230)
+MainFrame.Size = UDim2.new(0, 340, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -250)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -40,7 +40,7 @@ TitleLabel.Parent = MainFrame
 ScrollFrame.Size = UDim2.new(1, -20, 1, -60)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 650)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 700)
 ScrollFrame.ScrollBarThickness = 2
 ScrollFrame.Parent = MainFrame
 
@@ -59,11 +59,13 @@ local Flags = {
     AuraStrength = false,
     AutoClimb = false,
     AutoCakes = false,
-    SpawnAtStairs = true
+    SpawnAtStairs = true,
+    SpamClaim25Cakes = false
 }
 
 local climbThread = nil
 local cakeThread = nil
+local spamClaimThread = nil
 
 local STAIRS_POSITION = Vector3.new(51, 29, -39)
 
@@ -141,6 +143,7 @@ AddMobileToggle("Auto AuraStrength Upgrade", "AuraStrength", false)
 AddMobileToggle("Auto-Climb to Floor 50", "AutoClimb", false)
 AddMobileToggle("Auto-Collect Cakes", "AutoCakes", false)
 AddMobileToggle("Spawn at Stairs", "SpawnAtStairs", true)
+AddMobileToggle("💰 Spam Claim 25Cakes", "SpamClaim25Cakes", false)
 
 -- Add Teleport to Rebirth Door Button
 AddMobileButton("🚪 Teleport to Rebirth Door", function()
@@ -185,6 +188,12 @@ local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5)
 local playerRemotes = remotesFolder and remotesFolder:WaitForChild("PlayerRemotes", 5)
 local sprintRE = playerRemotes and playerRemotes:WaitForChild("SprintRequestRE", 5)
 local purchaseUpgradeRF = playerRemotes and playerRemotes:WaitForChild("PurchaseTowerUpgradeRF", 5)
+local LimitedDanielRF = playerRemotes and playerRemotes:WaitForChild("LimitedDanielRF", 5)
+
+-- Get UpdateStateRE for spam claiming
+local ClientData = ReplicatedStorage:FindFirstChild("ClientData")
+local StateController = ClientData and ClientData:FindFirstChild("StateController")
+local UpdateStateRE = StateController and StateController:FindFirstChild("UpdateStateRE")
 
 local function fireSprintRemote()
     if Flags.Sprint and sprintRE then pcall(function() sprintRE:FireServer(true) end) end
@@ -241,6 +250,68 @@ task.spawn(function()
             if Flags.BonusSpeed then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "BonusSpeed") end) end
             if Flags.AuraRecharge then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "AuraRecharge") end) end
             if Flags.AuraStrength then pcall(function() purchaseUpgradeRF:InvokeServer("Unlock", "AuraStrength") end) end
+        end
+    end
+end)
+
+-- =========================================================================
+-- SPAM CLAIM 25 CAKES ENGINE
+-- =========================================================================
+local function startSpamClaim()
+    if spamClaimThread then
+        task.cancel(spamClaimThread)
+        spamClaimThread = nil
+    end
+    
+    spamClaimThread = task.spawn(function()
+        print("💰 Starting spam claim loop for 25Cakes...")
+        
+        while Flags.SpamClaim25Cakes do
+            if not LimitedDanielRF or not UpdateStateRE then
+                print("❌ Required remotes not found!")
+                break
+            end
+            
+            -- Remove 25Cakes from claimed rewards
+            pcall(function()
+                firesignal(UpdateStateRE.OnClientEvent, {
+                    action = "UpdateLimitedDaniel",
+                    value = {
+                        ClaimedRewards = {}  -- Remove all claimed rewards
+                    }
+                })
+            end)
+            
+            task.wait(0.1)
+            
+            -- Claim the reward
+            pcall(function()
+                local result = LimitedDanielRF:InvokeServer("ClaimReward", "25Cakes")
+                print("✅ Claimed 25Cakes! Result:", result)
+            end)
+            
+            task.wait(0.2)
+        end
+        
+        print("❌ Spam claim stopped!")
+        spamClaimThread = nil
+    end)
+end
+
+-- Monitor SpamClaim25Cakes flag changes
+task.spawn(function()
+    local previousState = false
+    while true do
+        task.wait(0.1)
+        if Flags.SpamClaim25Cakes and not previousState then
+            startSpamClaim()
+            previousState = true
+        elseif not Flags.SpamClaim25Cakes and previousState then
+            if spamClaimThread then
+                task.cancel(spamClaimThread)
+                spamClaimThread = nil
+            end
+            previousState = false
         end
     end
 end)
