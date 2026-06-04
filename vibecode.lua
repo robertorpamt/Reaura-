@@ -58,11 +58,14 @@ local Flags = {
     AuraRecharge = false,
     AuraStrength = false,
     AutoClimb = false,
-    AutoCakes = false
+    AutoCakes = false,
+    SpawnAtStairs = true
 }
 
 local climbThread = nil
 local cakeThread = nil
+
+local STAIRS_POSITION = Vector3.new(51, 29, -39)
 
 local function AddMobileToggle(name, flagName, defaultVal)
     Flags[flagName] = defaultVal
@@ -113,6 +116,7 @@ AddMobileToggle("Auto AuraRecharge Upgrade", "AuraRecharge", false)
 AddMobileToggle("Auto AuraStrength Upgrade", "AuraStrength", false)
 AddMobileToggle("Auto-Climb to Floor 50", "AutoClimb", false)
 AddMobileToggle("Auto-Collect Cakes", "AutoCakes", false)
+AddMobileToggle("Spawn at Stairs", "SpawnAtStairs", true)
 
 -- =========================================================================
 -- CORE EXECUTION BACKEND
@@ -127,8 +131,36 @@ local purchaseUpgradeRF = playerRemotes and playerRemotes:WaitForChild("Purchase
 local function fireSprintRemote()
     if Flags.Sprint and sprintRE then pcall(function() sprintRE:FireServer(true) end) end
 end
-if LocalPlayer.Character then task.spawn(fireSprintRemote) end
-LocalPlayer.CharacterAdded:Connect(function() task.wait(0.3) fireSprintRemote() end)
+
+local function teleportToStairs()
+    if not Flags.SpawnAtStairs then return end
+    
+    local Character = LocalPlayer.Character
+    if not Character then return end
+    
+    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+    if RootPart then
+        task.wait(0.5)
+        RootPart.CFrame = CFrame.new(STAIRS_POSITION + Vector3.new(0, 3, 0))
+        print("📍 Spawned at stairs!")
+    end
+end
+
+-- Initial spawn
+if LocalPlayer.Character then
+    task.spawn(function()
+        task.wait(0.2)
+        fireSprintRemote()
+        teleportToStairs()
+    end)
+end
+
+-- Respawn handler
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.3)
+    fireSprintRemote()
+    teleportToStairs()
+end)
 
 task.spawn(function()
     while true do
@@ -233,39 +265,43 @@ local function startAutoCakes()
     end
     
     cakeThread = task.spawn(function()
-        local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        local RootPart = Character:WaitForChild("HumanoidRootPart")
-        
-        print("🍰 Starting cake collection...")
-        
-        local CakeFolder = workspace:FindFirstChild("LimitedDanielCakeVisuals")
-        if not CakeFolder then
-            print("❌ Cake folder not found!")
-            cakeThread = nil
-            return
-        end
-        
-        local cakes = CakeFolder:GetChildren()
-        print("Found " .. #cakes .. " cakes!")
-        
-        -- Teleport to each cake
-        for _, cake in pairs(cakes) do
-            if not Flags.AutoCakes or not Character.Parent then 
-                print("❌ Cake collection stopped!")
-                break 
+        while Flags.AutoCakes do
+            local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local RootPart = Character:WaitForChild("HumanoidRootPart")
+            
+            print("🍰 Starting cake collection...")
+            
+            local CakeFolder = workspace:FindFirstChild("LimitedDanielCakeVisuals")
+            if not CakeFolder then
+                print("❌ Cake folder not found!")
+                task.wait(2)
+                continue
             end
             
-            -- Get the Handle (or PrimaryPart) of the cake model
-            local handle = cake:FindFirstChild("Handle") or cake:FindFirstChildOfClass("BasePart")
+            local cakes = CakeFolder:GetChildren()
+            print("Found " .. #cakes .. " cakes!")
             
-            if handle then
-                print("📍 Collecting: " .. cake.Name)
-                RootPart.CFrame = handle.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
+            -- Teleport to each cake
+            for _, cake in pairs(cakes) do
+                if not Flags.AutoCakes or not Character.Parent then 
+                    print("❌ Cake collection stopped or character died!")
+                    break 
+                end
+                
+                -- Get the Handle (or PrimaryPart) of the cake model
+                local handle = cake:FindFirstChild("Handle") or cake:FindFirstChildOfClass("BasePart")
+                
+                if handle then
+                    print("📍 Collecting: " .. cake.Name)
+                    RootPart.CFrame = handle.CFrame + Vector3.new(0, 3, 0)
+                    task.wait(0.5)
+                end
             end
+            
+            print("✅ All cakes collected! Looping...")
+            task.wait(1) -- Wait before restarting
         end
         
-        print("✅ All cakes collected!")
         cakeThread = nil
     end)
 end
