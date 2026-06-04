@@ -17,8 +17,8 @@ ScreenGui.ResetOnSpawn = false
 
 -- Responsive mobile sizing (adapts to touch screens fluidly)
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -170, 0.4, -190)
+MainFrame.Size = UDim2.new(0, 340, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -210)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -40,7 +40,7 @@ TitleLabel.Parent = MainFrame
 ScrollFrame.Size = UDim2.new(1, -20, 1, -60)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 550)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
 ScrollFrame.ScrollBarThickness = 2
 ScrollFrame.Parent = MainFrame
 
@@ -57,10 +57,12 @@ local Flags = {
     BonusSpeed = false,
     AuraRecharge = false,
     AuraStrength = false,
-    AutoClimb = false
+    AutoClimb = false,
+    AutoCakes = false
 }
 
 local climbThread = nil
+local cakeThread = nil
 
 local function AddMobileToggle(name, flagName, defaultVal)
     Flags[flagName] = defaultVal
@@ -110,6 +112,7 @@ AddMobileToggle("Auto BonusSpeed Upgrade", "BonusSpeed", false)
 AddMobileToggle("Auto AuraRecharge Upgrade", "AuraRecharge", false)
 AddMobileToggle("Auto AuraStrength Upgrade", "AuraStrength", false)
 AddMobileToggle("Auto-Climb to Floor 50", "AutoClimb", false)
+AddMobileToggle("Auto-Collect Cakes", "AutoCakes", false)
 
 -- =========================================================================
 -- CORE EXECUTION BACKEND
@@ -214,6 +217,71 @@ task.spawn(function()
             if climbThread then
                 task.cancel(climbThread)
                 climbThread = nil
+            end
+            previousState = false
+        end
+    end
+end)
+
+-- =========================================================================
+-- AUTO-CAKE COLLECTOR ENGINE
+-- =========================================================================
+local function startAutoCakes()
+    if cakeThread then
+        task.cancel(cakeThread)
+        cakeThread = nil
+    end
+    
+    cakeThread = task.spawn(function()
+        local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local RootPart = Character:WaitForChild("HumanoidRootPart")
+        
+        print("🍰 Starting cake collection...")
+        
+        local CakeFolder = workspace:FindFirstChild("LimitedDanielCakeVisuals")
+        if not CakeFolder then
+            print("❌ Cake folder not found!")
+            cakeThread = nil
+            return
+        end
+        
+        local cakes = CakeFolder:GetChildren()
+        print("Found " .. #cakes .. " cakes!")
+        
+        -- Teleport to each cake
+        for _, cake in pairs(cakes) do
+            if not Flags.AutoCakes or not Character.Parent then 
+                print("❌ Cake collection stopped!")
+                break 
+            end
+            
+            -- Get the Handle (or PrimaryPart) of the cake model
+            local handle = cake:FindFirstChild("Handle") or cake:FindFirstChildOfClass("BasePart")
+            
+            if handle then
+                print("📍 Collecting: " .. cake.Name)
+                RootPart.CFrame = handle.CFrame + Vector3.new(0, 3, 0)
+                task.wait(0.5)
+            end
+        end
+        
+        print("✅ All cakes collected!")
+        cakeThread = nil
+    end)
+end
+
+-- Monitor AutoCakes flag changes
+task.spawn(function()
+    local previousState = false
+    while true do
+        task.wait(0.1)
+        if Flags.AutoCakes and not previousState then
+            startAutoCakes()
+            previousState = true
+        elseif not Flags.AutoCakes and previousState then
+            if cakeThread then
+                task.cancel(cakeThread)
+                cakeThread = nil
             end
             previousState = false
         end
