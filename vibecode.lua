@@ -17,8 +17,8 @@ ScreenGui.ResetOnSpawn = false
 
 -- Responsive mobile sizing (adapts to touch screens fluidly)
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -170, 0.4, -210)
+MainFrame.Size = UDim2.new(0, 340, 0, 460)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -230)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -40,7 +40,7 @@ TitleLabel.Parent = MainFrame
 ScrollFrame.Size = UDim2.new(1, -20, 1, -60)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 45)
 ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 650)
 ScrollFrame.ScrollBarThickness = 2
 ScrollFrame.Parent = MainFrame
 
@@ -105,6 +105,30 @@ local function AddMobileToggle(name, flagName, defaultVal)
     end)
 end
 
+local function AddMobileButton(name, callback)
+    local Frame = Instance.new("Frame")
+    local Button = Instance.new("TextButton")
+    
+    Frame.Size = UDim2.new(1, 0, 0, 36)
+    Frame.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+    Frame.BorderSizePixel = 0
+    Frame.Parent = ScrollFrame
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+    
+    Button.Size = UDim2.new(1, 0, 1, 0)
+    Button.BackgroundTransparency = 1
+    Button.Text = "  " .. name
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 13
+    Button.Font = Enum.Font.SourceSansBold
+    Button.TextXAlignment = Enum.TextXAlignment.Left
+    Button.Parent = Frame
+    
+    Button.MouseButton1Click:Connect(function()
+        callback()
+    end)
+end
+
 -- Generate Touch UI Items
 AddMobileToggle("Auto-Sprint (Always-On)", "Sprint", true)
 AddMobileToggle("Auto APGain Upgrade", "APGain", false)
@@ -117,6 +141,40 @@ AddMobileToggle("Auto AuraStrength Upgrade", "AuraStrength", false)
 AddMobileToggle("Auto-Climb to Floor 50", "AutoClimb", false)
 AddMobileToggle("Auto-Collect Cakes", "AutoCakes", false)
 AddMobileToggle("Spawn at Stairs", "SpawnAtStairs", true)
+
+-- Add Teleport to Rebirth Door Button
+AddMobileButton("🚪 Teleport to Rebirth Door", function()
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+    local Character = LocalPlayer.Character
+    
+    if not Character then
+        print("❌ No character found!")
+        return
+    end
+    
+    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not RootPart then
+        print("❌ No HumanoidRootPart found!")
+        return
+    end
+    
+    -- Find FINISH part in SpiralTower
+    local SpiralTower = workspace:FindFirstChild("SpiralTower")
+    if not SpiralTower then
+        print("❌ SpiralTower not found!")
+        return
+    end
+    
+    local FinishDoor = SpiralTower:FindFirstChild("FINISH")
+    if not FinishDoor then
+        print("❌ FINISH door not found!")
+        return
+    end
+    
+    print("🚪 Teleporting to Rebirth Door...")
+    RootPart.CFrame = FinishDoor.CFrame + Vector3.new(0, 3, 0)
+    print("✅ Arrived at Rebirth Door!")
+end)
 
 -- =========================================================================
 -- CORE EXECUTION BACKEND
